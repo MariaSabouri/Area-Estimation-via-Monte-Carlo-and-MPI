@@ -1,0 +1,11 @@
+mont-carlo_area_calculation
+
+# Executables
+mont-carlo_area_calculation
+*.out
+
+# Object files
+*.o
+
+# MPI executables
+*.exe
