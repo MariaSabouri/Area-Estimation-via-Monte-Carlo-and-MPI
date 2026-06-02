@@ -12,6 +12,7 @@ that is,
 mpicc mont-carlo_area_calculation.c -o mont-carlo_area_calculation -lm
 */
 #define U(x) (sin(x) + 1)   //U(x) must be positive in my code 
+#define OFFSET_U(a,b) (1 * (b - a)) //This is offset area added to our function
 
 double max_func(
     double a,
@@ -124,7 +125,7 @@ int main(void){
 
     mont_carlo(rank_num, comm_size, local_a, local_b, h, local_n, mont_carlo_n, &total_area, &local_area);
 
-    total_area -= (b - a) * 1;
+    total_area -= OFFSET_U(a,b);
     if(rank_num == 0){
         printf("Total Area is %lf: \n", total_area);
     }
