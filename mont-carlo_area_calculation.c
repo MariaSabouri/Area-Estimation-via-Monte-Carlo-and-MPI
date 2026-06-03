@@ -14,6 +14,31 @@ mpicc mont-carlo_area_calculation.c -o mont-carlo_area_calculation -lm
 #define U(x) (sin(x) + 1)   //U(x) must be positive in my code 
 #define OFFSET_U(a,b) (1 * (b - a)) //This is offset area added to our function
 
+void save_results(
+    int processes,
+    int slices,
+    long long total_points,
+    double total_area,
+    double elapsed_time
+) {
+    FILE *fp = fopen("results.csv", "a");
+
+    if (fp == NULL) {
+        perror("Error opening file");
+        return;
+    }
+
+    fprintf(fp,
+            "%d,%d,%lld,%.6f,%.6f\n",
+            processes,
+            slices,
+            total_points,
+            total_area,
+            elapsed_time);
+
+    fclose(fp);
+}
+
 double max_func(
     double a,
     double b
@@ -43,6 +68,8 @@ void mont_carlo(
     double* total_area,
     double* local_area
 ){
+    srand(time(NULL) + rank_num);
+    // printf("rank: %d\n", rank_num);
     *local_area = 0; 
     for (int i = 0; i < local_n; i++) {
         int hit = 0;
@@ -56,11 +83,10 @@ void mont_carlo(
 
             hit += (U(r_x) >= r_y) ? 1 : 0;
         }
-        *local_area += max_func(left_endpt + i * h, left_endpt + (i + 1) * h ) * h * hit / mont_carlo_n;
+        *local_area += max_func(left_endpt + i * h, left_endpt + (i + 1) * h ) * h * ((double)hit / mont_carlo_n);;
     }
+    printf("rank: %d, left_endpt: %lf, right_endpt: %lf, local area: %lf\n", rank_num, left_endpt, right_endpt, *local_area);
     MPI_Reduce(local_area, total_area, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    
-
 }
 
 void get_input(
@@ -70,7 +96,8 @@ void get_input(
     double* b_p,
     int* n_p,
     int* mont_carlo_n,
-    double* h
+    double* h,
+    time_t* start_time
 ){
     if (rank_num == 0){
         printf("Enter a, b, n and mont_carlo_n\n");
@@ -83,8 +110,12 @@ void get_input(
     MPI_Bcast(h, 1, MPI_DOUBLE, 0, MPI_COMM_WORLD);
     MPI_Bcast(n_p, 1, MPI_INT, 0, MPI_COMM_WORLD);
     MPI_Bcast(mont_carlo_n, 1, MPI_INT, 0, MPI_COMM_WORLD);
-
+    
+    if (rank_num == 0) {
+        time(start_time);
+    }
 }
+
 
 void distribute_local_values(
     int rank_num,
@@ -98,36 +129,70 @@ void distribute_local_values(
     int* local_n
 ){
     /*calculate local_n*/
-    int sub_area;
     *local_n = n / comm_size;
     int remainder = n % comm_size;
     *local_n += (rank_num < remainder) ? 1 : 0;
 
     /*calculate local_a and local_b*/
-    *local_a = a + rank_num * (*local_n) * h;
+    *local_a = a + (rank_num * (*local_n) + ((rank_num >= remainder) ? remainder:0)) * h;
     *local_b = *local_a + (*local_n) * h;
+    
+    printf("rank: %d ,local a: %lf, local b: %lf, h: %lf, local n: %d\n",rank_num, *local_a, *local_b, h, *local_n);
 }
     
 int main(void){
-    srand(time(NULL));
 
     int comm_size, rank_num, n, local_n, mont_carlo_n;
     double a, b, h, local_a, local_b, total_area, local_area;
+    time_t start_time, end_time;
 
 
     MPI_Init(NULL,NULL);
     MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank_num);
 
-    get_input(rank_num, comm_size, &a, &b, &n, &mont_carlo_n, &h);
+    get_input(rank_num, comm_size, &a, &b, &n, &mont_carlo_n, &h, &start_time);
 
     distribute_local_values(rank_num, comm_size, a, b, h, &local_a, &local_b, n, &local_n);
 
     mont_carlo(rank_num, comm_size, local_a, local_b, h, local_n, mont_carlo_n, &total_area, &local_area);
 
-    total_area -= OFFSET_U(a,b);
     if(rank_num == 0){
-        printf("Total Area is %lf: \n", total_area);
+        total_area -= OFFSET_U(a,b);
+
+        time(&end_time);
+        double elapsed = difftime(end_time, start_time) * 1000000;
+
+        FILE *fp = fopen("results.csv", "r");
+        if (fp == NULL) {
+            fp = fopen("results.csv", "w");
+            fprintf(fp,
+                "Processes,Slices,Total Points,Total Area,Elapsed Time (us)\n");
+            fclose(fp);    
+        } else {
+            fclose(fp);    
+        }
+
+
+        printf("┌──────────────────────────────────┐\n");
+        printf("│ Results                          │\n");
+        printf("├──────────────────────────────────┤\n");
+        printf("│ Processes        : %-16d │\n", comm_size);
+        printf("│ a                : %-16.4lf │\n", a);
+        printf("│ b                : %-16.4lf │\n", b);
+        printf("│ Number of slices : %-16d │\n", n);
+        printf("│ Total points     : %-16d │\n", mont_carlo_n);
+        printf("│ Total Area       : %-16.6lf │\n", total_area);
+        printf("│ Elapsed Time     : %-11.3f Mus │\n", elapsed);
+        printf("└──────────────────────────────────┘\n");
+        
+        save_results(
+            comm_size,
+            n,
+            mont_carlo_n,
+            total_area,
+            elapsed
+        );
     }
 
     MPI_Finalize();
