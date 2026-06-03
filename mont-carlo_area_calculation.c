@@ -87,8 +87,6 @@ void mont_carlo(
     }
     printf("rank: %d, left_endpt: %lf, right_endpt: %lf, local area: %lf\n", rank_num, left_endpt, right_endpt, *local_area);
     MPI_Reduce(local_area, total_area, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
-    
-
 }
 
 void get_input(
@@ -138,7 +136,7 @@ void distribute_local_values(
     /*calculate local_a and local_b*/
     *local_a = a + (rank_num * (*local_n) + ((rank_num >= remainder) ? remainder:0)) * h;
     *local_b = *local_a + (*local_n) * h;
-
+    
     printf("rank: %d ,local a: %lf, local b: %lf, h: %lf, local n: %d\n",rank_num, *local_a, *local_b, h, *local_n);
 }
     
