@@ -169,7 +169,7 @@ int main(void){
         if (fp == NULL) {
             fp = fopen("results.csv", "w");
             fprintf(fp,
-                "Processes,Slices,Total Points,Total Area,Elapsed Time (s)\n");
+                "Processes,Slices,Total Points,Total Area,Elapsed Time (us)\n");
             fclose(fp);    
         } else {
             fclose(fp);    
