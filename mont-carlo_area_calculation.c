@@ -68,6 +68,8 @@ void mont_carlo(
     double* total_area,
     double* local_area
 ){
+    srand(time(NULL) + rank_num);
+    // printf("rank: %d\n", rank_num);
     *local_area = 0; 
     for (int i = 0; i < local_n; i++) {
         int hit = 0;
@@ -81,8 +83,9 @@ void mont_carlo(
 
             hit += (U(r_x) >= r_y) ? 1 : 0;
         }
-        *local_area += max_func(left_endpt + i * h, left_endpt + (i + 1) * h ) * h * hit / mont_carlo_n;
+        *local_area += max_func(left_endpt + i * h, left_endpt + (i + 1) * h ) * h * ((double)hit / mont_carlo_n);;
     }
+    printf("rank: %d, left_endpt: %lf, right_endpt: %lf, local area: %lf\n", rank_num, left_endpt, right_endpt, *local_area);
     MPI_Reduce(local_area, total_area, 1, MPI_DOUBLE, MPI_SUM, 0, MPI_COMM_WORLD);
     
 
@@ -115,6 +118,7 @@ void get_input(
     }
 }
 
+
 void distribute_local_values(
     int rank_num,
     int comm_size,
@@ -127,18 +131,18 @@ void distribute_local_values(
     int* local_n
 ){
     /*calculate local_n*/
-    int sub_area;
     *local_n = n / comm_size;
     int remainder = n % comm_size;
     *local_n += (rank_num < remainder) ? 1 : 0;
 
     /*calculate local_a and local_b*/
-    *local_a = a + rank_num * (*local_n) * h;
+    *local_a = a + (rank_num * (*local_n) + ((rank_num >= remainder) ? remainder:0)) * h;
     *local_b = *local_a + (*local_n) * h;
+
+    printf("rank: %d ,local a: %lf, local b: %lf, h: %lf, local n: %d\n",rank_num, *local_a, *local_b, h, *local_n);
 }
     
 int main(void){
-    srand(time(NULL));
 
     int comm_size, rank_num, n, local_n, mont_carlo_n;
     double a, b, h, local_a, local_b, total_area, local_area;
